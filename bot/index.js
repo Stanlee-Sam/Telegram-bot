@@ -9,16 +9,6 @@ const pool = require("../db/index.js");
 let bot;
 
 // Fetch ngrok URL if running locally
-async function getNgrokUrl() {
-  try {
-    const res = await axios.get("http://127.0.0.1:4040/api/tunnels");
-    const tunnel = res.data.tunnels.find((t) => t.proto === "https");
-    return tunnel ? tunnel.public_url : null;
-  } catch (err) {
-    console.error("❌ Error fetching ngrok URL:", err.message);
-    return null;
-  }
-}
 
 const PENDING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -37,10 +27,6 @@ const startBot = async ({ useWebhook = false } = {}) => {
   const CHANNEL_ID = process.env.GROUP_ID;
   const ADMIN_IDS =
     process.env.ADMIN_ID?.split(",").map((id) => id.trim()) || [];
-
-  const ngrokUrl = await getNgrokUrl();
-  if (!ngrokUrl)
-    console.warn("⚠️ Could not detect ngrok URL. /simulate may fail.");
 
   // pendingSubscriptions keyed by Telegram user id (String)
   const pendingSubscriptions = new Map();
@@ -176,9 +162,7 @@ const startBot = async ({ useWebhook = false } = {}) => {
     );
 
     const amount = 1;
-    const callbackUrl = ngrokUrl
-      ? `${ngrokUrl}/webhook/mpesa`
-      : process.env.CALLBACK_URL;
+    const callbackUrl = process.env.CALLBACK_URL;
 
     try {
       // save user mapping (phone <-> chatId)
@@ -222,10 +206,9 @@ const startBot = async ({ useWebhook = false } = {}) => {
 
     (async () => {
       try {
-        if (!ngrokUrl) throw new Error("Ngrok URL not detected");
-        await axios.get(
-          `${ngrokUrl}/webhook/simulate-success/${chatId}/${amount}`
-        );
+        const simulateUrl = `${process.env.CALLBACK_URL}/simulate-success/${chatId}/${amount}`;
+        await axios.get(simulateUrl);
+
         await bot.sendMessage(
           chatId,
           `✅ Simulated subscription created for ${chatId} amount ${amount} KES.`

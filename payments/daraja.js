@@ -17,7 +17,9 @@ const CALLBACK_URL = process.env.CALLBACK_URL;
 
 // Generate OAuth access token
 async function getAccessToken() {
-const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64");
+  const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString(
+    "base64"
+  );
   try {
     const response = await axios.get(
       `${DARJA_ENV}/oauth/v1/generate?grant_type=client_credentials`,
@@ -34,7 +36,10 @@ const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64"
 // Helper: timestamp YYYYMMDDHHMMSS
 function getTimestamp() {
   const date = new Date();
-  return date.toISOString().replace(/[-:TZ]/g, "").slice(0, 14);
+  return date
+    .toISOString()
+    .replace(/[-:TZ]/g, "")
+    .slice(0, 14);
 }
 
 // Helper: generate password
@@ -44,19 +49,14 @@ function generatePassword(timestamp) {
   );
 }
 
-
-
 // Send STK Push request
-async function stkPush(phoneNumber, amount) {
+async function stkPush(phoneNumber, amount, callbackUrl = CALLBACK_URL) {
   const tokenData = await getAccessToken();
   if (!tokenData || tokenData.error) return tokenData;
 
   const token = tokenData;
   const timestamp = getTimestamp();
   const password = generatePassword(timestamp);
-
-  
-  let callbackUrl = CALLBACK_URL;
 
   const payload = {
     BusinessShortCode: BUSINESS_SHORTCODE,
@@ -85,6 +85,7 @@ async function stkPush(phoneNumber, amount) {
       console.error(`❌ STK Push error: ${errMsg}`);
       return { success: false, message: errMsg, code: response.data.errorCode };
     }
+    console.log("STK Push response:", response.data);
 
     return response.data;
   } catch (error) {
@@ -94,9 +95,15 @@ async function stkPush(phoneNumber, amount) {
       errData?.errorCode === "500.001.1001" ||
       errData?.errorMessage?.includes("Merchant does not exist")
     ) {
-      return { success: false, message: "❌ Merchant does not exist. Check shortcode/passkey." };
+      return {
+        success: false,
+        message: "❌ Merchant does not exist. Check shortcode/passkey.",
+      };
     }
-    if (errData?.errorCode === "401" || errData?.errorMessage?.includes("Invalid credentials")) {
+    if (
+      errData?.errorCode === "401" ||
+      errData?.errorMessage?.includes("Invalid credentials")
+    ) {
       return { success: false, message: "❌ Invalid Consumer Key or Secret" };
     }
 
