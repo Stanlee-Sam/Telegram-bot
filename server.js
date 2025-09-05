@@ -61,6 +61,10 @@ async function ensureTelegramWebhook() {
     bot.processUpdate(req.body); // Telegram sends POST updates here
     res.sendStatus(200);
   });
+  app.get("/webhook/telegram", (req, res) => {
+  res.send("Webhook is live!");
+});
+
 
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, async () => {
