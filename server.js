@@ -21,23 +21,17 @@ async function ensureTelegramWebhook() {
   try {
     const url = process.env.TELEGRAM_WEBHOOK_URL;
 
-    // 1. Check existing webhook
-    const info = await axios.get(
-      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/getWebhookInfo`
-    );
+    // Delete any existing webhook first
+    await axios.get(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/deleteWebhook`);
+    console.log("✅ Old webhook deleted (if any)");
 
-    if (info.data.ok && info.data.result.url === url) {
-      console.log("✅ Webhook already set:", url);
-      return;
-    }
-
-    // 2. Set new webhook
+    // Set new webhook
     const response = await axios.get(
       `https://api.telegram.org/bot${process.env.BOT_TOKEN}/setWebhook?url=${url}`
     );
 
     if (response.data.ok) {
-      console.log("✅ Webhook set successfully:", url);
+      console.log("✅ New webhook set successfully:", url);
     } else {
       console.error("⚠️ Failed to set webhook:", response.data);
     }
@@ -45,6 +39,7 @@ async function ensureTelegramWebhook() {
     console.error("❌ Error ensuring webhook:", err.message);
   }
 }
+
 
 (async () => {
   // Start Telegram bot (webhook mode)
@@ -61,9 +56,7 @@ async function ensureTelegramWebhook() {
     bot.processUpdate(req.body); // Telegram sends POST updates here
     res.sendStatus(200);
   });
-  app.get("/webhook/telegram", (req, res) => {
-  res.send("Webhook is live!");
-});
+  
 
 
   const PORT = process.env.PORT || 5000;
