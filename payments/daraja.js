@@ -1,6 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
-const base64 = require("base-64");
+//const base64 = require("base-64");
 
 // Environment-aware API base
 const DARJA_ENV =
@@ -17,7 +17,7 @@ const CALLBACK_URL = process.env.CALLBACK_URL;
 
 // Generate OAuth access token
 async function getAccessToken() {
-  const auth = base64.encode(`${CONSUMER_KEY}:${CONSUMER_SECRET}`);
+const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64");
   try {
     const response = await axios.get(
       `${DARJA_ENV}/oauth/v1/generate?grant_type=client_credentials`,
