@@ -2,8 +2,10 @@ require("dotenv").config();
 const express = require("express");
 const { startBot } = require("./bot");
 const mpesaWebhook = require("./payments/webhook");
-const app = express();
 const { startExpiryCron } = require("./jobs/expiryCheck");
+const axios = require("axios");
+
+const app = express();
 
 // Middleware to parse JSON and keep rawBody for M-Pesa verification
 app.use(
@@ -14,9 +16,39 @@ app.use(
   })
 );
 
+// --- Helper: Set Telegram Webhook if not already set ---
+async function ensureTelegramWebhook() {
+  try {
+    const url = process.env.TELEGRAM_WEBHOOK_URL;
+
+    // 1. Check existing webhook
+    const info = await axios.get(
+      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/getWebhookInfo`
+    );
+
+    if (info.data.ok && info.data.result.url === url) {
+      console.log("✅ Webhook already set:", url);
+      return;
+    }
+
+    // 2. Set new webhook
+    const response = await axios.get(
+      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/setWebhook?url=${url}`
+    );
+
+    if (response.data.ok) {
+      console.log("✅ Webhook set successfully:", url);
+    } else {
+      console.error("⚠️ Failed to set webhook:", response.data);
+    }
+  } catch (err) {
+    console.error("❌ Error ensuring webhook:", err.message);
+  }
+}
+
 (async () => {
   // Start Telegram bot (webhook mode)
-  const bot = await startBot({ useWebhook: true }); // pass flag to bot
+  const bot = await startBot({ useWebhook: true });
 
   // Start expiry cron job
   startExpiryCron(bot);
@@ -31,7 +63,8 @@ app.use(
   });
 
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  app.listen(PORT, async () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    await ensureTelegramWebhook(); // 🔹 Set or verify webhook automatically
   });
 })();

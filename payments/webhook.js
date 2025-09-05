@@ -61,7 +61,7 @@ module.exports = (bot) => {
             `https://api.telegram.org/bot${process.env.BOT_TOKEN}/createChatInviteLink`,
             {
               chat_id: CHANNEL_ID,
-              expire_date: Math.floor(Date.now() / 1000) + 3600, 
+              expire_date: Math.floor(Date.now() / 1000) + 3600,
               member_limit: 1, // one-time use
             }
           );
@@ -178,6 +178,39 @@ module.exports = (bot) => {
       res.json({ success: true, sub });
     } catch (err) {
       console.error("⚠️ Simulation error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Add this inside your router file
+  router.get("/set-webhook", async (req, res) => {
+    try {
+      const url = `${process.env.TELEGRAM_WEBHOOK_URL}`;
+      const response = await axios.get(
+        `https://api.telegram.org/bot${process.env.BOT_TOKEN}/setWebhook?url=${url}`
+      );
+
+      if (response.data.ok) {
+        console.log("✅ Webhook set successfully:", url);
+        return res.json({ success: true, url, result: response.data });
+      } else {
+        console.error("⚠️ Failed to set webhook:", response.data);
+        return res.status(500).json({ success: false, error: response.data });
+      }
+    } catch (err) {
+      console.error("❌ Error setting webhook:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  router.get("/delete-webhook", async (req, res) => {
+    try {
+      const response = await axios.get(
+        `https://api.telegram.org/bot${process.env.BOT_TOKEN}/deleteWebhook`
+      );
+      return res.json(response.data);
+    } catch (err) {
+      console.error("❌ Error deleting webhook:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
