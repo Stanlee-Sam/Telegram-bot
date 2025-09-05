@@ -3,10 +3,10 @@ const axios = require("axios");
 //const base64 = require("base-64");
 
 // Environment-aware API base
-const DARJA_ENV =
-  process.env.NODE_ENV === "production"
+const DARJA_ENV = process.env.DARAJA_BASE_URL
+  || (process.env.NODE_ENV === "production"
     ? "https://api.safaricom.co.ke"
-    : "https://sandbox.safaricom.co.ke";
+    : "https://sandbox.safaricom.co.ke");
 
 // Daraja credentials
 const CONSUMER_KEY = process.env.DARAJA_CONSUMER_KEY;
@@ -17,22 +17,24 @@ const CALLBACK_URL = process.env.CALLBACK_URL;
 
 // Generate OAuth access token
 async function getAccessToken() {
-  const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString(
-    "base64"
-  );
+  const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64");
   try {
     const response = await axios.get(
       `${DARJA_ENV}/oauth/v1/generate?grant_type=client_credentials`,
       { headers: { Authorization: `Basic ${auth}` } }
     );
+    console.log("✅ Daraja token response:", response.data);
     return response.data.access_token;
   } catch (error) {
-    const msg = error.response?.data || error.message;
-    console.error("❌ Error getting access token:", msg);
-    return { error: true, message: "Failed to get access token", details: msg };
+    console.error("❌ Error getting access token:", {
+      status: error.response?.status,
+      body: error.response?.data,
+      message: error.message,
+      DARJA_ENV
+    });
+    return { error: true, message: "Failed to get access token", details: error.response?.data || error.message };
   }
 }
-
 // Helper: timestamp YYYYMMDDHHMMSS
 function getTimestamp() {
   const date = new Date();
