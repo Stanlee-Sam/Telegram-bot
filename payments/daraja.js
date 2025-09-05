@@ -44,18 +44,7 @@ function generatePassword(timestamp) {
   );
 }
 
-// Get ngrok public URL (for sandbox testing only)
-async function getNgrokUrl() {
-  if (process.env.NODE_ENV === "production") return null;
-  try {
-    const res = await axios.get("http://127.0.0.1:4040/api/tunnels");
-    const tunnel = res.data.tunnels.find((t) => t.proto === "https");
-    return tunnel?.public_url || null;
-  } catch (err) {
-    console.error("❌ Error fetching ngrok URL:", err.message);
-    return null;
-  }
-}
+
 
 // Send STK Push request
 async function stkPush(phoneNumber, amount) {
@@ -66,10 +55,8 @@ async function stkPush(phoneNumber, amount) {
   const timestamp = getTimestamp();
   const password = generatePassword(timestamp);
 
-  // Use callback URL (ngrok for dev, real URL for prod)
+  
   let callbackUrl = CALLBACK_URL;
-  const ngrokUrl = await getNgrokUrl();
-  if (ngrokUrl) callbackUrl = `${ngrokUrl}/webhook/mpesa`;
 
   const payload = {
     BusinessShortCode: BUSINESS_SHORTCODE,
