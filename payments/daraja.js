@@ -3,8 +3,9 @@ const axios = require("axios");
 //const base64 = require("base-64");
 
 // Environment-aware API base
-const DARJA_ENV = process.env.DARAJA_BASE_URL
-  || (process.env.NODE_ENV === "production"
+const DARJA_ENV =
+  process.env.DARAJA_BASE_URL ||
+  (process.env.NODE_ENV === "production"
     ? "https://api.safaricom.co.ke"
     : "https://sandbox.safaricom.co.ke");
 
@@ -17,7 +18,9 @@ const CALLBACK_URL = process.env.CALLBACK_URL;
 
 // Generate OAuth access token
 async function getAccessToken() {
-  const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64");
+  const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString(
+    "base64"
+  );
   try {
     const response = await axios.get(
       `${DARJA_ENV}/oauth/v1/generate?grant_type=client_credentials`,
@@ -30,9 +33,13 @@ async function getAccessToken() {
       status: error.response?.status,
       body: error.response?.data,
       message: error.message,
-      DARJA_ENV
+      DARJA_ENV,
     });
-    return { error: true, message: "Failed to get access token", details: error.response?.data || error.message };
+    return {
+      error: true,
+      message: "Failed to get access token",
+      details: error.response?.data || error.message,
+    };
   }
 }
 // Helper: timestamp YYYYMMDDHHMMSS
@@ -64,7 +71,7 @@ async function stkPush(phoneNumber, amount, callbackUrl = CALLBACK_URL) {
     BusinessShortCode: BUSINESS_SHORTCODE,
     Password: password,
     Timestamp: timestamp,
-    TransactionType: "CustomerPayBillOnline",
+    TransactionType: "CustomerBuyGoodsOnline",
     Amount: amount,
     PartyA: phoneNumber,
     PartyB: BUSINESS_SHORTCODE,
