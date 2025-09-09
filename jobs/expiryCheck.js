@@ -59,21 +59,21 @@ async function removeExpiredUsers(bot) {
   }
 }
 
-function startExpiryCron(bot) {
-  cron.schedule("0 0 * * *", async () => {
-    const count = await removeExpiredUsers(bot);
-    console.log(`⏰ Daily expiry check ran. Removed ${count} expired users.`);
-  });
-}
-
-
 // function startExpiryCron(bot) {
-//   // Runs every 20 seconds: */20 * * * * *
-//   cron.schedule("*/20 * * * * *", async () => {
+//   cron.schedule("0 0 * * *", async () => {
 //     const count = await removeExpiredUsers(bot);
-//     console.log(`⏰ Cron test ran. Removed ${count} expired users.`);
+//     console.log(`⏰ Daily expiry check ran. Removed ${count} expired users.`);
 //   });
 // }
+
+
+function startExpiryCron(bot) {
+  // Runs every 20 seconds: */20 * * * * *
+  cron.schedule("*/20 * * * * *", async () => {
+    const count = await removeExpiredUsers(bot);
+    console.log(`⏰ Cron test ran. Removed ${count} expired users.`);
+  });
+}
 
 
 
