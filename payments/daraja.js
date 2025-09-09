@@ -13,6 +13,7 @@ const DARJA_ENV =
 const CONSUMER_KEY = process.env.DARAJA_CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.DARAJA_CONSUMER_SECRET;
 const BUSINESS_SHORTCODE = process.env.BUSINESS_SHORTCODE;
+const BUSINESS_CHILD_SHORTCODE = process.env.BUSINESS_CHILD_SHORTCODE
 const PASSKEY = process.env.PASSKEY;
 const CALLBACK_URL = process.env.CALLBACK_URL;
 
@@ -74,7 +75,7 @@ async function stkPush(phoneNumber, amount, callbackUrl = CALLBACK_URL) {
     TransactionType: "CustomerBuyGoodsOnline",
     Amount: amount,
     PartyA: phoneNumber,
-    PartyB: BUSINESS_SHORTCODE,
+    PartyB: BUSINESS_CHILD_SHORTCODE,
     PhoneNumber: phoneNumber,
     CallBackURL: callbackUrl,
     AccountReference: "Telegram Subscription",
