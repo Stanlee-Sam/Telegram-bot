@@ -89,7 +89,6 @@ const startBot = async ({ useWebhook = false } = {}) => {
 
     helpMessage += "🔹 User Commands:\n";
     helpMessage += "• /subscribe - Start subscription\n";
-    helpMessage += "• /simulate - Test subscription (sandbox)\n";
     helpMessage += "• /help - Show this menu\n";
 
     bot.sendMessage(chatId, helpMessage);
@@ -161,7 +160,7 @@ const startBot = async ({ useWebhook = false } = {}) => {
       "✅ Phone number received! Processing your subscription..."
     );
 
-    const amount = 1;
+    const amount = 100;
     const callbackUrl = process.env.CALLBACK_URL;
 
     try {
