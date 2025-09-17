@@ -103,97 +103,138 @@ const startBot = async ({ useWebhook = false } = {}) => {
     if (pendingSubscriptions.has(fromId)) {
       bot.sendMessage(
         chatId,
-        "⚠️ You already have a pending subscription request. Please send your phone number or wait."
+        "⚠️ You already have a pending subscription request."
       );
       return;
     }
 
     const timeoutId = setTimeout(() => {
       pendingSubscriptions.delete(fromId);
-      try {
-        bot.sendMessage(
-          chatId,
-          "⏳ Subscription request timed out. Please run /subscribe again when ready."
-        );
-      } catch (e) {}
+      bot.sendMessage(chatId, "⏳ Request timed out. Run /subscribe again.");
     }, PENDING_TIMEOUT_MS);
 
     pendingSubscriptions.set(fromId, {
-      step: "awaiting_phone",
+      step: "awaiting_plan",
       chatId,
       timeoutId,
     });
 
     bot.sendMessage(
       chatId,
-      "📲 Enter your M-Pesa phone number (format: 2547XXXXXXXX):"
+      "📌 Choose a plan:\n\n" +
+        "1️⃣ Daily - 30 KES\n" +
+        "2️⃣ Weekly - 50 KES\n" +
+        "3️⃣ Monthly - 100 KES\n\n" +
+        "Reply with: daily / weekly / monthly"
     );
   });
 
   // --- single centralized message handler for phone input ---
   bot.on("message", async (msg) => {
-    // ignore non-text and commands
-    if (!msg.text) return;
-    if (msg.text.trim().startsWith("/")) return;
+    if (!msg.text || msg.text.trim().startsWith("/")) return;
 
     const fromId = String(msg.from?.id || "");
     const pending = pendingSubscriptions.get(fromId);
-    if (!pending || pending.step !== "awaiting_phone") return;
+    if (!pending) return;
 
     const chatId = pending.chatId || msg.chat.id;
-    const phoneNumber = msg.text.replace(/\D/g, ""); // sanitize digits only
-    console.log(
-      `Pending phone input from ${fromId}: raw='${msg.text}' sanitized='${phoneNumber}'`
-    );
 
-    if (!/^2547\d{8}$/.test(phoneNumber)) {
-      await bot.sendMessage(
-        chatId,
-        "❌ Invalid phone number. Use format 2547XXXXXXXX"
-      );
-      return;
-    }
+    // Step 1: handle plan choice
+    if (pending.step === "awaiting_plan") {
+      const choice = msg.text.trim().toLowerCase();
+      let plan, amount, days;
 
-    clearTimeout(pending.timeoutId);
-    await bot.sendMessage(
-      chatId,
-      "✅ Phone number received! Processing your subscription..."
-    );
-
-    const amount = 100;
-    const callbackUrl = process.env.CALLBACK_URL;
-
-    try {
-      // save user mapping (phone <-> chatId)
-      await saveUser({
-        chatId: String(chatId),
-        phoneNumber: String(phoneNumber),
-        username: msg.from.username || null,
-      });
-
-      // trigger STK Push
-      const response = await stkPush(phoneNumber, amount, callbackUrl);
-      console.log("stkPush response:", response);
-
-      if (response?.ResponseCode === "0" || response?.responseCode === "0") {
-        await bot.sendMessage(
-          chatId,
-          "✅ Payment request sent! Check your phone for the M-Pesa prompt."
-        );
+      if (choice === "daily") {
+        plan = "daily";
+        amount = 30;
+        days = 1;
+      } else if (choice === "weekly") {
+        plan = "weekly";
+        amount = 50;
+        days = 7;
+      } else if (choice === "monthly") {
+        plan = "monthly";
+        amount = 100;
+        days = 30;
       } else {
-        await bot.sendMessage(
+        return bot.sendMessage(
           chatId,
-          "⚠️ Payment request failed. Please try again later."
+          "❌ Invalid choice. Type daily / weekly / monthly."
         );
       }
-    } catch (err) {
-      console.error("Subscription error:", err);
+
+      clearTimeout(pending.timeoutId);
+      const timeoutId = setTimeout(
+        () => pendingSubscriptions.delete(fromId),
+        PENDING_TIMEOUT_MS
+      );
+
+      pendingSubscriptions.set(fromId, {
+        step: "awaiting_phone",
+        chatId,
+        plan,
+        amount,
+        days,
+        timeoutId,
+      });
+
+      return bot.sendMessage(
+        chatId,
+        "📲 Enter your M-Pesa phone number (format: 2547XXXXXXXX):"
+      );
+    }
+
+    // Step 2: handle phone number
+    if (pending.step === "awaiting_phone") {
+      const phoneNumber = msg.text.replace(/\D/g, "");
+      if (!/^2547\d{8}$/.test(phoneNumber)) {
+        return bot.sendMessage(
+          chatId,
+          "❌ Invalid phone. Use format 2547XXXXXXXX"
+        );
+      }
+
+      const { plan, amount, days } = pending;
+      clearTimeout(pending.timeoutId);
+      pendingSubscriptions.delete(fromId);
+
       await bot.sendMessage(
         chatId,
-        "❌ Something went wrong while processing your subscription. Please try again or contact support."
+        `✅ Phone received!\n💳 Charging ${amount} KES for ${plan} plan...`
       );
-    } finally {
-      pendingSubscriptions.delete(fromId);
+
+      try {
+        await saveUser({
+          chatId: String(chatId),
+          phoneNumber: String(phoneNumber),
+          username: msg.from.username || null,
+        });
+
+        const response = await stkPush(
+          phoneNumber,
+          amount,
+          process.env.CALLBACK_URL
+        );
+        console.log("stkPush response:", response);
+
+        if (response?.ResponseCode === "0" || response?.responseCode === "0") {
+          await bot.sendMessage(
+            chatId,
+            "📲 Check your phone for the M-Pesa prompt!"
+          );
+        } else {
+          await bot.sendMessage(
+            chatId,
+            "⚠️ Payment request failed. Try again later."
+          );
+        }
+      } catch (err) {
+        console.error("Subscription error:", err);
+        await bot.sendMessage(
+          chatId,
+          "❌ Error processing subscription. Try again later."
+        );
+      }
     }
   });
 

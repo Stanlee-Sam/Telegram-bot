@@ -44,8 +44,13 @@ module.exports = (bot) => {
         const chatId = user.chatId;
         console.log(`✅ Payment successful: ${amount} KES from ${phone}`);
 
+        let daysToAdd = 30; // default monthly
+        if (amount == 30) daysToAdd = 1; // daily
+        if (amount == 50) daysToAdd = 7; // weekly
+        if (amount == 100) daysToAdd = 30; // monthly
+
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
+        expiryDate.setDate(expiryDate.getDate() + daysToAdd);
 
         const sub = await saveSubscription({
           telegram_id: chatId,
@@ -68,10 +73,18 @@ module.exports = (bot) => {
 
           if (response.data.ok) {
             const inviteLink = response.data.result.invite_link;
+            const plan =
+              amount == 30
+                ? "Daily (1 day)"
+                : amount == 50
+                ? "Weekly (7 days)"
+                : "Monthly (30 days)";
+
             await bot.sendMessage(
               chatId,
-              `🎉 Subscription successful!\nHere’s your personal invite link (valid for 1 hour):\n${inviteLink}`
+              `🎉 Subscription successful!\n✅ Plan: ${plan}\n💵 Amount: ${amount} KES\n\nHere’s your personal invite link (valid for 1 hour):\n${inviteLink}`
             );
+
             console.log("✅ Invite sent:", inviteLink);
           } else {
             console.error("⚠️ Telegram API error:", response.data);
