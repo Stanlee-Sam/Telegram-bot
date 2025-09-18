@@ -8,9 +8,8 @@ const pool = require("../db/index.js");
 
 let bot;
 
-// Fetch ngrok URL if running locally
-
 const PENDING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+const pendingSubscriptions = new Map();
 
 const startBot = async ({ useWebhook = false } = {}) => {
   const token = process.env.BOT_TOKEN;
@@ -28,17 +27,11 @@ const startBot = async ({ useWebhook = false } = {}) => {
   const ADMIN_IDS =
     process.env.ADMIN_ID?.split(",").map((id) => id.trim()) || [];
 
-  // pendingSubscriptions keyed by Telegram user id (String)
-  const pendingSubscriptions = new Map();
-
   function isAdmin(msg) {
     const uid = String(msg.from?.id || "");
-    const allowed = ADMIN_IDS.includes(uid);
-    // useful debug line: console.log(`isAdmin(${uid}) => ${allowed}`);
-    return allowed;
+    return ADMIN_IDS.includes(uid);
   }
 
-  // wrapper to enforce admin-only commands with consistent messaging and logging
   function requireAdmin(cmdName, handler) {
     return async (msg, match) => {
       console.log(`COMMAND: ${cmdName} called by ${msg.from?.id}`);
@@ -62,22 +55,28 @@ const startBot = async ({ useWebhook = false } = {}) => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // --- Basic commands ---
+  // --- START ---
   bot.onText(/^\/start(?:@\S+)?$/i, (msg) => {
-    console.log(`/start from ${msg.from?.id}`);
     bot.sendMessage(
       msg.chat.id,
-      "👋 Hello! Welcome to D'atrix Subscription bot! Use /help for navigation"
+      "👋 Hello! Welcome to D'atrix Subscription bot! Use the buttons below 👇",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📌 Subscribe", callback_data: "subscribe" }],
+            [{ text: "ℹ️ Help", callback_data: "help_menu" }],
+          ],
+        },
+      }
     );
   });
 
+  // --- HELP ---
   bot.onText(/^\/help(?:@\S+)?$/i, (msg) => {
-    console.log(`/help from ${msg.from?.id}`);
     const chatId = msg.chat.id;
     const isAdminUser = isAdmin(msg);
 
     let helpMessage = "👋 Welcome to D'atrix Subscription Bot!\n\n";
-
     if (isAdminUser) {
       helpMessage += "🛠 Admin Commands:\n";
       helpMessage += "• /members - List active subscribers\n";
@@ -87,49 +86,89 @@ const startBot = async ({ useWebhook = false } = {}) => {
       helpMessage += "• /checkExpiry - Remove expired subscriptions\n\n";
     }
 
-    helpMessage += "🔹 User Commands:\n";
-    helpMessage += "• /subscribe - Start subscription\n";
-    helpMessage += "• /help - Show this menu\n";
+    helpMessage += "🔹 User Options:\nUse the buttons below 👇";
 
-    bot.sendMessage(chatId, helpMessage);
+    const keyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📌 Subscribe", callback_data: "subscribe" }],
+          [{ text: "ℹ️ Help", callback_data: "help_menu" }],
+        ],
+      },
+    };
+
+    bot.sendMessage(chatId, helpMessage, keyboard);
   });
 
-  // --- Subscription flow (command starts it) ---
-  bot.onText(/^\/subscribe(?:@\S+)?$/i, (msg) => {
-    console.log(`/subscribe from ${msg.from?.id}`);
-    const fromId = String(msg.from?.id);
-    const chatId = msg.chat.id;
+  // --- CALLBACK HANDLER ---
+  bot.on("callback_query", async (query) => {
+    const chatId = query.message.chat.id;
+    const fromId = String(query.from.id);
+    const data = query.data;
 
-    if (pendingSubscriptions.has(fromId)) {
-      bot.sendMessage(
+    if (data === "help_menu") {
+      await bot.sendMessage(
         chatId,
-        "⚠️ You already have a pending subscription request."
+        "👋 To subscribe, click *Subscribe* and follow the steps.\n\n" +
+          "💳 Payment is done via M-Pesa STK push.\n\n" +
+          "Available plans:\n" +
+          "• Daily - 30 KES\n" +
+          "• Weekly - 50 KES\n" +
+          "• Monthly - 100 KES",
+        { parse_mode: "Markdown" }
       );
-      return;
     }
 
-    const timeoutId = setTimeout(() => {
-      pendingSubscriptions.delete(fromId);
-      bot.sendMessage(chatId, "⏳ Request timed out. Run /subscribe again.");
-    }, PENDING_TIMEOUT_MS);
+    if (data === "subscribe") {
+      pendingSubscriptions.set(fromId, {
+        step: "awaiting_plan",
+        chatId,
+      });
 
-    pendingSubscriptions.set(fromId, {
-      step: "awaiting_plan",
-      chatId,
-      timeoutId,
-    });
+      const planKeyboard = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "1️⃣ Daily (30 KES)", callback_data: "plan_daily" },
+              { text: "2️⃣ Weekly (50 KES)", callback_data: "plan_weekly" },
+            ],
+            [{ text: "3️⃣ Monthly (100 KES)", callback_data: "plan_monthly" }],
+          ],
+        },
+      };
 
-    bot.sendMessage(
-      chatId,
-      "📌 Choose a plan:\n\n" +
-        "1️⃣ Daily - 30 KES\n" +
-        "2️⃣ Weekly - 50 KES\n" +
-        "3️⃣ Monthly - 100 KES\n\n" +
-        "Reply with: daily / weekly / monthly"
-    );
+      await bot.sendMessage(chatId, "📌 Choose a subscription plan:", planKeyboard);
+    }
+
+    if (data.startsWith("plan_")) {
+      let plan, amount, days;
+      if (data === "plan_daily") {
+        plan = "daily";
+        amount = 30;
+        days = 1;
+      } else if (data === "plan_weekly") {
+        plan = "weekly";
+        amount = 50;
+        days = 7;
+      } else if (data === "plan_monthly") {
+        plan = "monthly";
+        amount = 100;
+        days = 30;
+      }
+
+      pendingSubscriptions.set(fromId, {
+        step: "awaiting_phone",
+        chatId,
+        plan,
+        amount,
+        days,
+      });
+
+      await bot.sendMessage(chatId, "📲 Enter your M-Pesa phone number (2547XXXXXXXX):");
+    }
   });
 
-  // --- single centralized message handler for phone input ---
+  // --- PHONE INPUT ---
   bot.on("message", async (msg) => {
     if (!msg.text || msg.text.trim().startsWith("/")) return;
 
@@ -139,63 +178,13 @@ const startBot = async ({ useWebhook = false } = {}) => {
 
     const chatId = pending.chatId || msg.chat.id;
 
-    // Step 1: handle plan choice
-    if (pending.step === "awaiting_plan") {
-      const choice = msg.text.trim().toLowerCase();
-      let plan, amount, days;
-
-      if (choice === "daily") {
-        plan = "daily";
-        amount = 30;
-        days = 1;
-      } else if (choice === "weekly") {
-        plan = "weekly";
-        amount = 50;
-        days = 7;
-      } else if (choice === "monthly") {
-        plan = "monthly";
-        amount = 100;
-        days = 30;
-      } else {
-        return bot.sendMessage(
-          chatId,
-          "❌ Invalid choice. Type daily / weekly / monthly."
-        );
-      }
-
-      clearTimeout(pending.timeoutId);
-      const timeoutId = setTimeout(
-        () => pendingSubscriptions.delete(fromId),
-        PENDING_TIMEOUT_MS
-      );
-
-      pendingSubscriptions.set(fromId, {
-        step: "awaiting_phone",
-        chatId,
-        plan,
-        amount,
-        days,
-        timeoutId,
-      });
-
-      return bot.sendMessage(
-        chatId,
-        "📲 Enter your M-Pesa phone number (format: 2547XXXXXXXX):"
-      );
-    }
-
-    // Step 2: handle phone number
     if (pending.step === "awaiting_phone") {
       const phoneNumber = msg.text.replace(/\D/g, "");
       if (!/^2547\d{8}$/.test(phoneNumber)) {
-        return bot.sendMessage(
-          chatId,
-          "❌ Invalid phone. Use format 2547XXXXXXXX"
-        );
+        return bot.sendMessage(chatId, "❌ Invalid phone. Use format 2547XXXXXXXX");
       }
 
       const { plan, amount, days } = pending;
-      clearTimeout(pending.timeoutId);
       pendingSubscriptions.delete(fromId);
 
       await bot.sendMessage(
@@ -210,49 +199,30 @@ const startBot = async ({ useWebhook = false } = {}) => {
           username: msg.from.username || null,
         });
 
-        const response = await stkPush(
-          phoneNumber,
-          amount,
-          process.env.CALLBACK_URL
-        );
+        const response = await stkPush(phoneNumber, amount, process.env.CALLBACK_URL);
         console.log("stkPush response:", response);
 
         if (response?.ResponseCode === "0" || response?.responseCode === "0") {
-          await bot.sendMessage(
-            chatId,
-            "📲 Check your phone for the M-Pesa prompt!"
-          );
+          await bot.sendMessage(chatId, "📲 Check your phone for the M-Pesa prompt!");
         } else {
-          await bot.sendMessage(
-            chatId,
-            "⚠️ Payment request failed. Try again later."
-          );
+          await bot.sendMessage(chatId, "⚠️ Payment request failed. Try again later.");
         }
       } catch (err) {
         console.error("Subscription error:", err);
-        await bot.sendMessage(
-          chatId,
-          "❌ Error processing subscription. Try again later."
-        );
+        await bot.sendMessage(chatId, "❌ Error processing subscription. Try again later.");
       }
     }
   });
 
-  // --- Simulation ---
+  // --- SIMULATION ---
   bot.onText(/^\/simulate(?:@\S+)?$/i, (msg) => {
-    console.log(`/simulate from ${msg.from?.id}`);
     const chatId = msg.chat.id;
     const amount = 100;
-
     (async () => {
       try {
         const simulateUrl = `${process.env.CALLBACK_URL}/simulate-success/${chatId}/${amount}`;
         await axios.get(simulateUrl);
-
-        await bot.sendMessage(
-          chatId,
-          `✅ Simulated subscription created for ${chatId} amount ${amount} KES.`
-        );
+        await bot.sendMessage(chatId, `✅ Simulated subscription for ${chatId} amount ${amount} KES.`);
       } catch (err) {
         console.error("Simulation error:", err.response?.data || err.message);
         await bot.sendMessage(chatId, "❌ Failed to simulate subscription.");
@@ -260,15 +230,12 @@ const startBot = async ({ useWebhook = false } = {}) => {
     })();
   });
 
-  // --- Admin-only commands (wrapped) ---
+  // --- ADMIN COMMANDS ---
   bot.onText(
     /^\/checkExpiry(?:@\S+)?$/i,
     requireAdmin("checkExpiry", async (msg) => {
       const count = await removeExpiredUsers(bot);
-      await bot.sendMessage(
-        msg.chat.id,
-        `✅ Expiry check completed. Removed ${count} user(s).`
-      );
+      await bot.sendMessage(msg.chat.id, `✅ Expiry check completed. Removed ${count} user(s).`);
     })
   );
 
@@ -279,15 +246,12 @@ const startBot = async ({ useWebhook = false } = {}) => {
         const res = await pool.query(
           `SELECT telegram_id, username, expiry_date FROM "Subscription" ORDER BY expiry_date DESC`
         );
-        if (!res.rows.length)
-          return bot.sendMessage(msg.chat.id, "No active subscribers found.");
+        if (!res.rows.length) return bot.sendMessage(msg.chat.id, "No active subscribers found.");
 
         const list = res.rows
           .map(
             (row) =>
-              `• ${row.username ? `@${row.username}` : row.telegram_id} - ${
-                row.telegram_id
-              } (expires: ${row.expiry_date.toISOString().split("T")[0]})`
+              `• ${row.username ? `@${row.username}` : row.telegram_id} - ${row.telegram_id} (expires: ${row.expiry_date.toISOString().split("T")[0]})`
           )
           .join("\n");
 
@@ -312,11 +276,8 @@ const startBot = async ({ useWebhook = false } = {}) => {
           return bot.sendMessage(msg.chat.id, `❌ User ${target} not found.`);
 
         const userId = res.rows[0].telegram_id;
-        await pool.query(`DELETE FROM "Subscription" WHERE telegram_id=$1`, [
-          userId,
-        ]);
+        await pool.query(`DELETE FROM "Subscription" WHERE telegram_id=$1`, [userId]);
 
-        // Try to remove from Telegram group (if present)
         try {
           const member = await bot.getChatMember(CHANNEL_ID, parseInt(userId));
           if (member.status !== "left" && member.status !== "kicked") {
@@ -325,21 +286,13 @@ const startBot = async ({ useWebhook = false } = {}) => {
             console.log(`Removed ${member.user.id} from Telegram group`);
           }
         } catch {
-          console.log(
-            `User ${target} not found in group or could not be removed`
-          );
+          console.log(`User ${target} not found in group or could not be removed`);
         }
 
-        await bot.sendMessage(
-          msg.chat.id,
-          `✅ User ${target} removed successfully.`
-        );
+        await bot.sendMessage(msg.chat.id, `✅ User ${target} removed successfully.`);
       } catch (err) {
         console.error(err);
-        await bot.sendMessage(
-          msg.chat.id,
-          `❌ Failed to remove user ${target}.`
-        );
+        await bot.sendMessage(msg.chat.id, `❌ Failed to remove user ${target}.`);
       }
     })
   );
@@ -358,13 +311,10 @@ const startBot = async ({ useWebhook = false } = {}) => {
           } catch {
             console.log(`Cannot DM user ${id}`);
           }
-          await sleep(1000); // rate limiting cushion
+          await sleep(1000);
         }
 
-        await bot.sendMessage(
-          msg.chat.id,
-          `✅ Broadcast sent to ${subscribers.length} subscribers.`
-        );
+        await bot.sendMessage(msg.chat.id, `✅ Broadcast sent to ${subscribers.length} subscribers.`);
       } catch (err) {
         console.error(err);
         await bot.sendMessage(msg.chat.id, "❌ Failed to broadcast.");
