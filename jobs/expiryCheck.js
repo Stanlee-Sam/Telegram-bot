@@ -63,10 +63,16 @@ async function removeExpiredUsers(bot) {
 }
 
 function startExpiryCron(bot) {
-  cron.schedule("50 23 * * *", async () => {
-    const count = await removeExpiredUsers(bot);
-    console.log(`⏰ Daily expiry check ran. Removed ${count} expired users.`);
-  });
+  cron.schedule(
+    "50 23 * * *",
+    async () => {
+      const count = await removeExpiredUsers(bot);
+      console.log(`⏰ Daily expiry check ran. Removed ${count} expired users.`);
+    },
+    {
+      timezone: "Africa/Nairobi",
+    }
+  );
 }
 
 // function startExpiryCron(bot) {
