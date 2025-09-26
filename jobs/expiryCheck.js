@@ -4,7 +4,7 @@ const pool = require("../db"); // DB connection
 const CHANNEL_ID = process.env.GROUP_ID; // from .env
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function removeExpiredUsers(bot) {
@@ -20,7 +20,7 @@ async function removeExpiredUsers(bot) {
       WHERE expiry_date < NOW()
     `);
 
-    const expiredUsers = result.rows.map(u => u.telegram_id).filter(Boolean);
+    const expiredUsers = result.rows.map((u) => u.telegram_id).filter(Boolean);
 
     if (!expiredUsers.length) {
       console.log("No expired users found.");
@@ -45,7 +45,10 @@ async function removeExpiredUsers(bot) {
         }
 
         try {
-          await bot.sendMessage(id, "⚠️ Your subscription has expired. Please /subscribe again.");
+          await bot.sendMessage(
+            id,
+            "⚠️ Your subscription has expired. Please /subscribe again."
+          );
         } catch {}
       } catch (err) {
         console.error(`Telegram removal failed for ${id}:`, err.message);
@@ -60,12 +63,11 @@ async function removeExpiredUsers(bot) {
 }
 
 function startExpiryCron(bot) {
-  cron.schedule("59 23 * * *", async () => {
+  cron.schedule("50 23 * * *", async () => {
     const count = await removeExpiredUsers(bot);
     console.log(`⏰ Daily expiry check ran. Removed ${count} expired users.`);
   });
 }
-
 
 // function startExpiryCron(bot) {
 //   // Runs every 20 seconds: */20 * * * * *
@@ -75,9 +77,4 @@ function startExpiryCron(bot) {
 //   });
 // }
 
-
-
 module.exports = { removeExpiredUsers, startExpiryCron };
-
-
-
