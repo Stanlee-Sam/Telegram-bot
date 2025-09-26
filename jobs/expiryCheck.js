@@ -60,7 +60,7 @@ async function removeExpiredUsers(bot) {
 }
 
 function startExpiryCron(bot) {
-  cron.schedule("0 0 * * *", async () => {
+  cron.schedule("59 23 * * *", async () => {
     const count = await removeExpiredUsers(bot);
     console.log(`⏰ Daily expiry check ran. Removed ${count} expired users.`);
   });
